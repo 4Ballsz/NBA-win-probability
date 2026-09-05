@@ -12,6 +12,8 @@ import time
 import pandas as pd
 from nba_api.stats.endpoints import leaguegamefinder
 
+import nba_features
+
 # The NBA regular season and playoffs for each season we train on. The API is
 # queried by date range rather than by season name so that playoff games are
 # included alongside the regular season.
@@ -69,6 +71,26 @@ def fetch_season(season, attempts=3):
     return games
 
 
+def drop_exhibition_games(games):
+    """
+    Remove All-Star weekend games (Team LeBron vs. Team Giannis, USA vs.
+    World, Rising Stars, etc).
+
+    LeagueGameFinder has no flag for these -- they come back mixed in with
+    real games, under made-up team codes that never appear in a normal
+    season. Dropping anything outside the 30 real teams also drops any
+    row where a team's own history is too short to be exhibition-only,
+    since a fake team with a code like "TMG" never accumulates one.
+    """
+    real_games = games[games['TEAM_ABBREVIATION'].isin(nba_features.TEAMS)]
+
+    dropped = len(games) - len(real_games)
+    if dropped:
+        print(f"  Dropped {dropped} exhibition-game rows (All-Star weekend, etc.)")
+
+    return real_games
+
+
 def collect_all_seasons():
     """Download every season listed in SEASON_DATES and stack them together."""
     print("Downloading NBA games")
@@ -84,7 +106,7 @@ def collect_all_seasons():
     if not seasons:
         return pd.DataFrame()
 
-    return pd.concat(seasons, ignore_index=True)
+    return drop_exhibition_games(pd.concat(seasons, ignore_index=True))
 
 
 if __name__ == "__main__":
